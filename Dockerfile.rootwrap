@@ -1,0 +1,22 @@
+# container2wasm 変換用のラッパーイメージ。素の vivliostyle-slim が
+# ブラウザ内 VM で動かない原因を吸収する。詳細は README の「wasmの生成」を参照。
+#
+# 1. c2w (Bochs フォーク) の 9p サーバはマウントを root 専用 (mode 0000,
+#    uid 0) で見せるため、USER vivliostyle のままでは作業ディレクトリを
+#    読めない。
+# 2. エミュレーション下では Chrome の起動に数分かかり、vivliostyle-cli が
+#    puppeteer.launch に渡していない launch timeout (既定 30 秒) を超過する。
+#    また root 実行のため Chrome に --no-sandbox が必要。
+# 3. ブラウザ内プロキシ (c2w-net-proxy) は動的な自己署名証明書で TLS を
+#    終端するため --ignore-certificate-errors が必要。さらに vivliostyle-cli は
+#    --proxy-server 指定時に Chrome の bypass リストへ <-loopback> を強制追加
+#    して localhost の暗黙バイパスを打ち消すため、自身のビューアサーバへの
+#    アクセスまでプロキシへ送られてしまう。これを sed で除去する。
+FROM ghcr.io/u1f992/vivliostyle-slim:v11.0.4-4
+USER root
+RUN sed -i 's/\.\.\.launchOptions,/...launchOptions, timeout: 0, args: [...(launchOptions.args ?? []), "--no-sandbox", "--disable-dev-shm-usage", "--ignore-certificate-errors"],/' \
+      /opt/vivliostyle-cli/dist/server-*.js \
+    && sed -i 's/proxyBypassRules\.push("<-loopback>");//' \
+      /opt/vivliostyle-cli/dist/server-*.js \
+    && grep -c 'no-sandbox' /opt/vivliostyle-cli/dist/server-*.js \
+    && ! grep -q 'loopback' /opt/vivliostyle-cli/dist/server-*.js

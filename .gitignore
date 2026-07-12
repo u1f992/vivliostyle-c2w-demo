@@ -1,0 +1,9 @@
+# ビルド産物 (workflow 中で生成される。ローカル開発時も untracked)
+/out.wasm
+/wasm/
+/wasm-manifest.json
+/c2w-net-proxy.wasm
+/site/
+# テスト成果物
+/test/browser*.pdf
+/test/*.log
