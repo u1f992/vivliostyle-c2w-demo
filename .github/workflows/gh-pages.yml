@@ -51,8 +51,15 @@ jobs:
       - name: Build wrapper image
         run: docker build -t vivliostyle-slim-root -f Dockerfile.rootwrap .
 
+      # SOURCE_REPO の上書きは c2w v0.8.4 リリースの埋め込み Dockerfile が
+      # organization 移行前の ktock/container2wasm を参照しているため
+      # (v0.8.4 タグは移行先にしか存在せず、そのままでは assets の clone に失敗する)
       - name: Convert image to wasm
-        run: /tmp/c2w --build-arg "VM_MEMORY_SIZE_MB=${VM_MEMORY_SIZE_MB}" vivliostyle-slim-root "$PWD/out.wasm"
+        run: >-
+          /tmp/c2w
+          --build-arg "VM_MEMORY_SIZE_MB=${VM_MEMORY_SIZE_MB}"
+          --build-arg "SOURCE_REPO=https://github.com/container2wasm/container2wasm"
+          vivliostyle-slim-root "$PWD/out.wasm"
 
       - name: Assemble site
         run: |
