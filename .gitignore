@@ -7,3 +7,5 @@
 # テスト成果物
 /test/browser*.pdf
 /test/*.log
+# 検証用の作業ディレクトリ
+/work/

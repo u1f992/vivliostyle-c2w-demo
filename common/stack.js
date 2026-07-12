@@ -173,7 +173,15 @@ function connect(name, shared, conn, certbuf) {
                         // 返すレスポンスには CORS 許可を付与する (ゲスト内ページからの
                         // cross-origin fetch を通すため)。
                         var hdrs = {};
-                        resp.headers.forEach((v, k) => { hdrs[k] = v; });
+                        resp.headers.forEach((v, k) => {
+                            // fetch はレスポンスを自動伸長して平文で返すため、
+                            // 実体と矛盾する転送系ヘッダを転送してはいけない
+                            // (ゲスト側が gzip として伸長を試みて Z_DATA_ERROR になる)
+                            var lk = k.toLowerCase();
+                            if (lk === "content-encoding" || lk === "content-length" ||
+                                lk === "transfer-encoding") return;
+                            hdrs[k] = v;
+                        });
                         hdrs["access-control-allow-origin"] = "*";
                         connObj.response = new TextEncoder().encode(JSON.stringify({
                             bodyUsed: resp.bodyUsed,

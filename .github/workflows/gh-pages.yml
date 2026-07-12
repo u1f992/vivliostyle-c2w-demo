@@ -65,9 +65,9 @@ jobs:
         run: |
           ./make-parts.sh out.wasm
           mkdir -p site
-          cp index.html main.js demo-worker.js stack.js stack-worker.js \
-             worker-util.js wasi-util.js coi-serviceworker.js site/
-          cp -r browser_wasi_shim site/
+          cp index.html main.js demo-worker.js stack-worker.js \
+             coi-serviceworker.js site/
+          cp -r browser_wasi_shim common site/
           cp /tmp/c2w-net-proxy.wasm site/
           mv wasm wasm-manifest.json site/
           du -sh site
