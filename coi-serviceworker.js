@@ -28,11 +28,15 @@ if (typeof window === 'undefined') {
         }
 
         // このデモ独自の追加: 同一オリジンの wasm パーツ (/wasm/) は Service
-        // Worker で再構築せず素通しする。SW の fetch ハンドラ内で大きな
-        // レスポンスを new Response(body, ...) で作り直すと、リモート配信
-        // (GitHub Pages) では取得が Failed to fetch になることがある。
-        // same-origin サブリソースは COEP: require-corp 下でも CORP 不要で
-        // 読めるため、素通ししても cross-origin isolation は保たれる。
+        // Worker のハンドラでインターセプトせず素通しする。coi-serviceworker は
+        // 全リクエストを respondWith(fetch(request)...) で取り直して COOP/COEP を
+        // 付与するが、45MB の wasm パーツでこの内部 fetch が Failed to fetch で
+        // reject する事象が報告された。発生条件は未特定 (手元の headless Chrome
+        // では再現せず、SW 経由でも取得は成功した)。素通しすればこの経路を通らず
+        // ブラウザネイティブの取得になるため、条件が何であれこの経路での失敗は
+        // 起きない。same-origin サブリソースは COEP: require-corp 下でも CORP 不要
+        // で読めるため cross-origin isolation は保たれる (計測でも
+        // fromServiceWorker=false / crossOriginIsolated=true を確認)。
         if (new URL(r.url).origin === self.location.origin && /\/wasm\//.test(r.url)) {
             return;
         }
