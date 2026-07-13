@@ -9,3 +9,4 @@
 /test/*.log
 # 検証用の作業ディレクトリ
 /work/
+/test/tls/

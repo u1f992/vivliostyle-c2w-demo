@@ -13,6 +13,15 @@ if (!window.crossOriginIsolated) {
 // gzip 分割パーツ。ローカル開発では ?wasm=out.wasm で単体ファイルを使える)
 const worker = new Worker("demo-worker.js" + location.search);
 
+// worker スクリプト自体のロード失敗 (COEP ブロックや一時的なネットワーク断)
+// は onmessage に何も届かず沈黙するため、ここで明示的に表示する
+let moduleReady = false;
+worker.onerror = (e) => {
+  statusEl.textContent =
+    "エラー：workerを起動できませんでした（" + (e.message || "詳細不明") +
+    "）。ページを再読み込みしてください。";
+};
+
 // ネットワークスタック: c2w-net-proxy.wasm を別 worker で動かし、stack.js の
 // newStack で VM worker と SharedArrayBuffer 越しに接続する。プロキシは VM の
 // 切断で終了するため、ビルドのたびに張り直す。
@@ -36,6 +45,7 @@ worker.onmessage = (msg) => {
   }
   switch (d.type) {
     case "ready":
+      moduleReady = true;
       statusEl.textContent = "wasmのロード完了。Build PDFを押してください。";
       btn.disabled = false;
       break;
@@ -59,7 +69,8 @@ worker.onmessage = (msg) => {
     case "error":
       statusEl.textContent = "エラー：" + d.message;
       window.__pdfError = d.message; // 自動テスト用のフック
-      btn.disabled = false;
+      // wasm ロード自体の失敗ならビルドは開始できないので有効化しない
+      btn.disabled = !moduleReady;
       startNet();
       break;
   }

@@ -28,15 +28,15 @@ if (typeof window === 'undefined') {
         }
 
         // このデモ独自の追加: 同一オリジンの wasm パーツ (/wasm/) は Service
-        // Worker のハンドラでインターセプトせず素通しする。coi-serviceworker は
-        // 全リクエストを respondWith(fetch(request)...) で取り直して COOP/COEP を
-        // 付与するが、45MB の wasm パーツでこの内部 fetch が Failed to fetch で
-        // reject する事象が報告された。発生条件は未特定 (手元の headless Chrome
-        // では再現せず、SW 経由でも取得は成功した)。素通しすればこの経路を通らず
-        // ブラウザネイティブの取得になるため、条件が何であれこの経路での失敗は
-        // 起きない。same-origin サブリソースは COEP: require-corp 下でも CORP 不要
-        // で読めるため cross-origin isolation は保たれる (計測でも
-        // fromServiceWorker=false / crossOriginIsolated=true を確認)。
+        // Worker のハンドラでインターセプトせず素通しする。数百 MB のダウンロード
+        // 中にネットワーク変化 (ERR_NETWORK_CHANGED) が起きた場合の再開処理は
+        // demo-worker.js が Range リクエストで行うため、SW で応答を再構築すると
+        // その再開の妨げになるだけで利点がない。same-origin サブリソースは
+        // COEP: require-corp 下でも CORP 不要で読めるため cross-origin isolation
+        // は保たれる (計測でも fromServiceWorker=false / crossOriginIsolated=true
+        // を確認)。なお worker スクリプト自体 (demo-worker.js 等) は素通しでは
+        // ダメで、SW の COEP 付与が必要 (付与がないと
+        // coep-frame-resource-needs-coep-header でブロックされる。実測済み)。
         if (new URL(r.url).origin === self.location.origin && /\/wasm\//.test(r.url)) {
             return;
         }
@@ -46,30 +46,79 @@ if (typeof window === 'undefined') {
                 credentials: "omit",
             })
             : r;
-        event.respondWith(
-            fetch(request)
-                .then((response) => {
-                    if (response.status === 0) {
-                        return response;
+        event.respondWith((async () => {
+            // このデモ独自の変更: SW 内部の fetch は、OS のネットワーク変化
+            // (VPN/docker/DHCP 更新等) を Chrome が検知した瞬間に全接続が
+            // ERR_NETWORK_CHANGED で破棄されると reject する (netlog で実測)。
+            // 元実装は失敗を undefined に変換して FetchEvent 全体をネットワーク
+            // エラーにするため、一時的な切断が「死んだページ」になる。リトライで
+            // 吸収し、navigate はそれでも失敗したら自動再試行ページを返す。
+            let response;
+            try {
+                response = await fetch(request);
+            } catch (e) {
+                if (r.method !== "GET") {
+                    console.error(e);
+                    return Response.error();
+                }
+                // 再試行は URL ベースの新しいリクエストで行い、切断済み
+                // コネクションやキャッシュ競合 (ERR_CACHE_RACE) を避ける
+                let lastErr = e;
+                for (const delay of [500, 1000, 2000]) {
+                    await new Promise((res) => setTimeout(res, delay));
+                    try {
+                        response = await fetch(r.url, {
+                            cache: "no-store",
+                            credentials: "same-origin",
+                            redirect: "follow",
+                        });
+                        lastErr = null;
+                        break;
+                    } catch (e2) {
+                        lastErr = e2;
                     }
-
-                    const newHeaders = new Headers(response.headers);
-                    newHeaders.set("Cross-Origin-Embedder-Policy",
-                        coepCredentialless ? "credentialless" : "require-corp"
-                    );
-                    if (!coepCredentialless) {
-                        newHeaders.set("Cross-Origin-Resource-Policy", "cross-origin");
+                }
+                if (lastErr) {
+                    console.error(lastErr);
+                    if (r.mode === "navigate") {
+                        return new Response(
+                            '<!doctype html><meta charset="utf-8">' +
+                            '<meta http-equiv="refresh" content="2">' +
+                            "<title>再接続中</title>" +
+                            "<p>ネットワークが一時的に切断されました。自動的に再試行します…</p>",
+                            {
+                                status: 503,
+                                headers: {
+                                    "Content-Type": "text/html; charset=utf-8",
+                                    "Cross-Origin-Embedder-Policy":
+                                        coepCredentialless ? "credentialless" : "require-corp",
+                                    "Cross-Origin-Opener-Policy": "same-origin",
+                                },
+                            }
+                        );
                     }
-                    newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
+                    return Response.error();
+                }
+            }
+            if (response.status === 0) {
+                return response;
+            }
 
-                    return new Response(response.body, {
-                        status: response.status,
-                        statusText: response.statusText,
-                        headers: newHeaders,
-                    });
-                })
-                .catch((e) => console.error(e))
-        );
+            const newHeaders = new Headers(response.headers);
+            newHeaders.set("Cross-Origin-Embedder-Policy",
+                coepCredentialless ? "credentialless" : "require-corp"
+            );
+            if (!coepCredentialless) {
+                newHeaders.set("Cross-Origin-Resource-Policy", "cross-origin");
+            }
+            newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
+
+            return new Response(response.body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers: newHeaders,
+            });
+        })());
     });
 
 } else {

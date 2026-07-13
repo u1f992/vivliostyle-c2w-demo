@@ -93,6 +93,16 @@ $ docker run --rm -v "$PWD:/w" --entrypoint node vivliostyle-slim-root \
 
 環境変数`HTDOCS`で配信ルート（既定`/w`）、`OUT_PDF`で出力先、`RAW_ARGS`（JSON配列）でwasmのargv差し替え（ゲスト内シェルでの調査用）を指定できる。
 
+### ネットワーク断耐性テスト
+
+ChromeはOSのネットワーク変化（VPN切替・dockerコンテナ起動・DHCP更新・IPv6一時アドレスのローテーション等）を検知すると、全接続を`ERR_NETWORK_CHANGED`で破棄する。wasmのダウンロードは数分続くため、その間に一度でも起きるとリトライのないfetchは即死する。次のテストは、site/をHTTP/2で配信しながらプローブコンテナのnetnsへアドレス変化を注入し、この状況を決定的に再現する（切断はHTTP/2セッションに起きる。HTTP/1.1の転送は生き残ることを実測済みのため、実Pagesと同じh2で配信して検証する）。
+
+```console
+$ ./test/blip-test.sh
+```
+
+「接続が中断されました。再開します…」を挟みつつ`DOWNLOAD_OUTCOME: COMPLETED`／`RELOAD_OUTCOME: alive`で終わり、最後に`PASS`が出れば成功。`demo-worker.js`はRangeリクエストで中断オフセットから再開し、`coi-serviceworker.js`はSW内部fetchの失敗をリトライで吸収する（navigateはそれでも失敗したら自動再試行ページを返す）。
+
 ## 構成
 
 | パス | 内容 |
@@ -108,9 +118,10 @@ $ docker run --rm -v "$PWD:/w" --entrypoint node vivliostyle-slim-root \
 | `node/run.mjs` | Node.js用ドライバ（worker_threadsで共通コアを実行、ネットワーク対応） |
 | `node/vm-worker.mjs`／`node/stack-worker.mjs`／`node/bootstrap.mjs` | Node.js用エントリと配線 |
 | `browser_wasi_shim/` | WASI実装（[bjorn3/browser_wasi_shim](https://github.com/bjorn3/browser_wasi_shim)のUMDバンドル、container2wasm examples由来） |
-| `coi-serviceworker.js` | cross-origin isolationの付与 |
+| `coi-serviceworker.js` | cross-origin isolationの付与（SW内部fetchのリトライを追加） |
 | `fetch-wasm.sh` | デプロイ済みPagesから分割パーツを取得してout.wasmを復元 |
 | `test/run-test.mjs` | ブラウザE2Eテスト |
+| `test/blip-test.sh` | ネットワーク断耐性テスト（`blip-inner.mjs`と`serve-h2.mjs`を使用） |
 
 ## 技術的な詳細
 
