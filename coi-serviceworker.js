@@ -27,6 +27,16 @@ if (typeof window === 'undefined') {
             return;
         }
 
+        // このデモ独自の追加: 同一オリジンの wasm パーツ (/wasm/) は Service
+        // Worker で再構築せず素通しする。SW の fetch ハンドラ内で大きな
+        // レスポンスを new Response(body, ...) で作り直すと、リモート配信
+        // (GitHub Pages) では取得が Failed to fetch になることがある。
+        // same-origin サブリソースは COEP: require-corp 下でも CORP 不要で
+        // 読めるため、素通ししても cross-origin isolation は保たれる。
+        if (new URL(r.url).origin === self.location.origin && /\/wasm\//.test(r.url)) {
+            return;
+        }
+
         const request = (coepCredentialless && r.mode === "no-cors")
             ? new Request(r, {
                 credentials: "omit",
