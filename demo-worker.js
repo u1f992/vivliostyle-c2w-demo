@@ -3,11 +3,11 @@
 // (common/vm-runner.js) にあり、Node.js 版 (node/vm-worker.mjs) と共用する。
 "use strict";
 
-importScripts(location.origin + "/browser_wasi_shim/index.js");
-importScripts(location.origin + "/browser_wasi_shim/wasi_defs.js");
-importScripts(location.origin + "/common/worker-util.js"); // sock*/recvCert/getCertDir/wasiHackSocket
-importScripts(location.origin + "/common/wasi-util.js"); // poll_oneoff 用 Subscription/Event 定義
-importScripts(location.origin + "/common/vm-runner.js"); // runC2w + shim パッチ群
+importScripts("browser_wasi_shim/index.js");
+importScripts("browser_wasi_shim/wasi_defs.js");
+importScripts("common/worker-util.js"); // sock*/recvCert/getCertDir/wasiHackSocket
+importScripts("common/wasi-util.js"); // poll_oneoff 用 Subscription/Event 定義
+importScripts("common/vm-runner.js"); // runC2w + shim パッチ群
 
 // wasm の取得: worker URL の ?wasm=<url> があれば単体ファイル (非圧縮) を、
 // なければ wasm-manifest.json に列挙された gzip 分割パーツを結合して使う。

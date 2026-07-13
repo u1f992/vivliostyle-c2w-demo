@@ -16,6 +16,9 @@ const puppeteer = require("puppeteer-core");
 const HTDOCS = process.env.HTDOCS ?? "/w";
 const OUT = process.env.OUT_PDF ?? "/w/test/browser.pdf";
 const PORT = 8080;
+// GitHub Pages のプロジェクトサイトと同じサブパス配信で検証する
+// (オリジン直下前提のパス解決ミスを検出するため)
+const BASE = process.env.BASE_PATH ?? "/vivliostyle-c2w-demo";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -26,7 +29,13 @@ const MIME = {
 
 const server = createServer((req, res) => {
   let p = decodeURIComponent(req.url.split("?")[0]);
-  if (p === "/") p = "/index.html";
+  if (!p.startsWith(BASE + "/") && p !== BASE) {
+    res.writeHead(404);
+    res.end("outside base path");
+    return;
+  }
+  p = p.slice(BASE.length);
+  if (p === "" || p === "/") p = "/index.html";
   const file = path.join(HTDOCS, p);
   if (!file.startsWith(HTDOCS) || !existsSync(file) || !statSync(file).isFile()) {
     res.writeHead(404);
@@ -73,7 +82,7 @@ async function waitFor(label, fn, timeoutMs, pollMs = 3000) {
   }
 }
 
-await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "load", timeout: 120000 });
+await page.goto(`http://127.0.0.1:${PORT}${BASE}/`, { waitUntil: "load", timeout: 120000 });
 
 // coi-serviceworker のリロードが service worker の activate と競合して
 // 制御が付かないことがあるため、isolation が付くまでリロードを繰り返す
