@@ -27,17 +27,27 @@ if (typeof window === 'undefined') {
             return;
         }
 
-        // このデモ独自の追加: 同一オリジンの wasm パーツ (/wasm/) は Service
-        // Worker のハンドラでインターセプトせず素通しする。数百 MB のダウンロード
-        // 中にネットワーク変化 (ERR_NETWORK_CHANGED) が起きた場合の再開処理は
-        // demo-worker.js が Range リクエストで行うため、SW で応答を再構築すると
-        // その再開の妨げになるだけで利点がない。same-origin サブリソースは
-        // COEP: require-corp 下でも CORP 不要で読めるため cross-origin isolation
-        // は保たれる (計測でも fromServiceWorker=false / crossOriginIsolated=true
-        // を確認)。なお worker スクリプト自体 (demo-worker.js 等) は素通しでは
-        // ダメで、SW の COEP 付与が必要 (付与がないと
-        // coep-frame-resource-needs-coep-header でブロックされる。実測済み)。
-        if (new URL(r.url).origin === self.location.origin && /\/wasm\//.test(r.url)) {
+        // このデモ独自の追加 (1/2): cross-origin リクエストは素通しする。この
+        // ページの cross-origin fetch は、c2w-net-proxy がゲストの HTTP を変換
+        // した CORS 管理下のものだけで、SW の再構築は何も加えない。ゲスト
+        // Chromium のテレメトリ (accounts.google.com 等、CORS 非対応で決定的に
+        // 失敗する) を下のリトライにかけるのは無意味で、ログと遅延を増やすだけ。
+        // COEP: credentialless 下の cross-origin 取得はブラウザ自体が管理する
+        // ため isolation は保たれる。
+        if (new URL(r.url).origin !== self.location.origin) {
+            return;
+        }
+
+        // このデモ独自の追加 (2/2): wasm パーツ (/wasm/) も素通しする。数百 MB
+        // のダウンロード中にネットワーク変化 (ERR_NETWORK_CHANGED) が起きた場合
+        // の再開処理は demo-worker.js が Range リクエストで行うため、SW で応答を
+        // 再構築するとその再開の妨げになるだけで利点がない。same-origin
+        // サブリソースは COEP: require-corp 下でも CORP 不要で読めるため
+        // cross-origin isolation は保たれる (計測でも fromServiceWorker=false /
+        // crossOriginIsolated=true を確認)。なお worker スクリプト自体
+        // (demo-worker.js 等) は素通しではダメで、SW の COEP 付与が必要 (付与が
+        // ないと coep-frame-resource-needs-coep-header でブロックされる。実測済み)。
+        if (/\/wasm\//.test(r.url)) {
             return;
         }
 
